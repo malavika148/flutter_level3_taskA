@@ -1,5 +1,7 @@
 import 'dart:math';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() =>
     runApp(MaterialApp(debugShowCheckedModeBanner: false, home: LockScreen()));
@@ -82,7 +84,6 @@ class NotesApp extends StatefulWidget {
 
 class _NotesAppState extends State<NotesApp> {
   final noteCtrl = TextEditingController();
-  final rnd = Random();
   final List<Map<String, dynamic>> notes = [];
 
   final colors = [
@@ -97,6 +98,29 @@ class _NotesAppState extends State<NotesApp> {
 
   Color selectedColor = Colors.pinkAccent.shade100;
 
+  @override
+  void initState() {
+    super.initState();
+    loadNotes();
+  }
+
+  void loadNotes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getString('notes');
+    if (data != null) {
+      final decoded = jsonDecode(data);
+      setState(() {
+        notes.clear();
+        notes.addAll(List<Map<String, dynamic>>.from(decoded));
+      });
+    }
+  }
+
+  void saveNotes() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('notes', jsonEncode(notes));
+  }
+
   void addNote() {
     if (noteCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -110,20 +134,25 @@ class _NotesAppState extends State<NotesApp> {
         "text": noteCtrl.text.trim(),
         "time":
             "${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}",
-        "color": selectedColor,
+        "color": selectedColor.value,
         "reminder": null,
         "fav": false,
       });
     });
+    saveNotes();
     noteCtrl.clear();
   }
 
-  void deleteNote(int i) => setState(() => notes.removeAt(i));
+  void deleteNote(int i) {
+    setState(() => notes.removeAt(i));
+    saveNotes();
+  }
 
   void toggleFav(int i) {
     setState(() {
       notes[i]["fav"] = !notes[i]["fav"];
     });
+    saveNotes();
   }
 
   void addReminder(int i) {
@@ -133,6 +162,7 @@ class _NotesAppState extends State<NotesApp> {
       notes[i]["reminder"] =
           "${reminder.day}/${reminder.month}/${reminder.year}";
     });
+    saveNotes();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Reminder added for next month")),
     );
@@ -165,6 +195,7 @@ class _NotesAppState extends State<NotesApp> {
                 notes[i]["time"] =
                     "${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}";
               });
+              saveNotes();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text("Note updated successfully")),
@@ -198,8 +229,7 @@ class _NotesAppState extends State<NotesApp> {
                       height: 35,
                       decoration: BoxDecoration(
                           color: c,
-                          border: Border.all(
-                              color: Colors.black26, width: 1.5),
+                          border: Border.all(color: Colors.black26, width: 1.5),
                           borderRadius: BorderRadius.circular(8)),
                     ),
                   ))
@@ -283,7 +313,7 @@ class _NotesAppState extends State<NotesApp> {
   Widget noteCard(Map<String, dynamic> n) {
     int i = notes.indexOf(n);
     return Card(
-      color: n["color"],
+      color: Color(n["color"]),
       margin: EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
         title: Text(n["text"], style: TextStyle(fontWeight: FontWeight.w600)),
